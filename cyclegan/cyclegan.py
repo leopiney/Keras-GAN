@@ -14,20 +14,20 @@ from data_loader import DataLoader
 
 
 class CycleGAN():
-    def __init__(self):
+    def __init__(self, dataset_name='apple2orange', input_shape=(128, 128, 3)):
         # Input shape
-        self.img_rows = 128
-        self.img_cols = 128
-        self.channels = 3
+        self.img_rows = input_shape[0]
+        self.img_cols = input_shape[1]
+        self.channels = input_shape[2]
         self.img_shape = (self.img_rows, self.img_cols, self.channels)
 
         # Configure data loader
-        self.dataset_name = 'apple2orange'
+        self.dataset_name = dataset_name
         self.data_loader = DataLoader(dataset_name=self.dataset_name,
                                       img_res=(self.img_rows, self.img_cols))
 
         # Calculate output shape of D (PatchGAN)
-        patch = int(self.img_rows / 2**4)
+        patch = int(self.img_rows / 2 ** 4)
         self.disc_patch = (patch, patch, 1)
 
         # Number of filters in the first layer of G and D
@@ -35,8 +35,8 @@ class CycleGAN():
         self.df = 64
 
         # Loss weights
-        self.lambda_cycle = 10.0                    # Cycle-consistency loss
-        self.lambda_id = 0.1 * self.lambda_cycle    # Identity loss
+        self.lambda_cycle = 10.0  # Cycle-consistency loss
+        self.lambda_id = 0.1 * self.lambda_cycle  # Identity loss
 
         optimizer = Adam(0.0002, 0.5)
 
@@ -66,9 +66,11 @@ class CycleGAN():
         # Translate images to the other domain
         fake_B = self.g_AB(img_A)
         fake_A = self.g_BA(img_B)
+
         # Translate images back to original domain
         reconstr_A = self.g_BA(fake_B)
         reconstr_B = self.g_AB(fake_A)
+
         # Identity mapping of images
         img_A_id = self.g_BA(img_A)
         img_B_id = self.g_AB(img_B)
@@ -220,6 +222,27 @@ class CycleGAN():
                 if batch_i % sample_interval == 0:
                     self.sample_images(epoch, batch_i)
 
+        self.save_model()
+
+    def save_model(self):
+
+        def save(model, model_name):
+            model_path = "saved_model/%s.json" % model_name
+            weights_path = "saved_model/%s_weights.hdf5" % model_name
+            options = {
+                "file_arch": model_path,
+                "file_weight": weights_path
+            }
+            json_string = model.to_json()
+            open(options['file_arch'], 'w').write(json_string)
+            model.save_weights(options['file_weight'])
+
+        save(self.d_A, "cyclegan_d_A")
+        save(self.d_B, "cyclegan_d_B")
+        save(self.g_AB, "cyclegan_g_AB")
+        save(self.g_BA, "cyclegan_g_BA")
+        save(self.combined, "cyclegan_combined")
+
     def sample_images(self, epoch, batch_i):
         os.makedirs('images/%s' % self.dataset_name, exist_ok=True)
         r, c = 2, 3
@@ -252,10 +275,20 @@ class CycleGAN():
                 axs[i, j].set_title(titles[j])
                 axs[i, j].axis('off')
                 cnt += 1
-        fig.savefig("images/%s/%d_%d.png" % (self.dataset_name, epoch, batch_i))
+        fig.savefig("images/%s_%dx%d/%d_%d.png" % (
+            self.dataset_name,
+            self.img_rows,
+            self.img_cols,
+            self.epoch,
+            batch_i
+        ))
         plt.close()
 
 
 if __name__ == '__main__':
-    gan = CycleGAN()
-    gan.train(epochs=200, batch_size=1, sample_interval=200)
+    gan = CycleGAN(dataset_name='base2basent', input_shape=(384, 384, 3))
+    gan.train(
+        epochs=100,
+        batch_size=8,
+        sample_interval=8
+    )
