@@ -1,6 +1,9 @@
-import scipy
 from glob import glob
+
 import numpy as np
+
+from PIL import Image
+
 
 class DataLoader():
     def __init__(self, dataset_name, img_res=(128, 128)):
@@ -17,15 +20,15 @@ class DataLoader():
         for img_path in batch_images:
             img = self.imread(img_path)
             if not is_testing:
-                img = scipy.misc.imresize(img, self.img_res)
+                img = self.imresize(img, self.img_res)
 
                 if np.random.random() > 0.5:
                     img = np.fliplr(img)
             else:
-                img = scipy.misc.imresize(img, self.img_res)
+                img = self.imresize(img, self.img_res)
             imgs.append(img)
 
-        imgs = np.array(imgs)/127.5 - 1.
+        imgs = np.array(imgs) / 127.5 - 1.
 
         return imgs
 
@@ -42,34 +45,39 @@ class DataLoader():
         path_A = np.random.choice(path_A, total_samples, replace=False)
         path_B = np.random.choice(path_B, total_samples, replace=False)
 
-        for i in range(self.n_batches-1):
-            batch_A = path_A[i*batch_size:(i+1)*batch_size]
-            batch_B = path_B[i*batch_size:(i+1)*batch_size]
+        for i in range(self.n_batches - 1):
+            batch_A = path_A[i * batch_size: (i + 1) * batch_size]
+            batch_B = path_B[i * batch_size: (i + 1) * batch_size]
             imgs_A, imgs_B = [], []
             for img_A, img_B in zip(batch_A, batch_B):
                 img_A = self.imread(img_A)
                 img_B = self.imread(img_B)
 
-                img_A = scipy.misc.imresize(img_A, self.img_res)
-                img_B = scipy.misc.imresize(img_B, self.img_res)
+                img_A = self.imresize(img_A, self.img_res)
+                img_B = self.imresize(img_B, self.img_res)
 
                 if not is_testing and np.random.random() > 0.5:
-                        img_A = np.fliplr(img_A)
-                        img_B = np.fliplr(img_B)
+                    img_A = np.fliplr(img_A)
+                    img_B = np.fliplr(img_B)
 
                 imgs_A.append(img_A)
                 imgs_B.append(img_B)
 
-            imgs_A = np.array(imgs_A)/127.5 - 1.
-            imgs_B = np.array(imgs_B)/127.5 - 1.
+            imgs_A = np.array(imgs_A) / 127.5 - 1.
+            imgs_B = np.array(imgs_B) / 127.5 - 1.
 
             yield imgs_A, imgs_B
 
     def load_img(self, path):
         img = self.imread(path)
-        img = scipy.misc.imresize(img, self.img_res)
-        img = img/127.5 - 1.
+        img = self.imresize(img, self.img_res)
+        img = img / 127.5 - 1.
         return img[np.newaxis, :, :, :]
 
+    def imresize(self, img, size):
+        img = Image.fromarray(img.astype(np.uint8))
+        img = img.resize(size)
+        return np.array(img).astype(np.float)
+
     def imread(self, path):
-        return scipy.misc.imread(path, mode='RGB').astype(np.float)
+        return np.array(Image.open(path)).astype(np.float)
