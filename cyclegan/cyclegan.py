@@ -8,7 +8,7 @@ from keras_contrib.layers.normalization.instancenormalization import InstanceNor
 from keras.layers import Input, Dropout, Concatenate
 from keras.layers.advanced_activations import LeakyReLU
 from keras.layers.convolutional import UpSampling2D, Conv2D
-from keras.models import Model
+from keras.models import model_from_json, Model
 from keras.optimizers import Adam
 from data_loader import DataLoader
 
@@ -43,12 +43,13 @@ class CycleGAN():
         # Build and compile the discriminators
         self.d_A = self.build_discriminator()
         self.d_B = self.build_discriminator()
-        self.d_A.compile(loss='mse',
-                         optimizer=optimizer,
-                         metrics=['accuracy'])
-        self.d_B.compile(loss='mse',
-                         optimizer=optimizer,
-                         metrics=['accuracy'])
+        self.d_compile_kwargs = dict(
+            loss='mse',
+            optimizer=optimizer,
+            metrics=['accuracy']
+        )
+        self.d_A.compile(**self.d_compile_kwargs)
+        self.d_B.compile(**self.d_compile_kwargs)
 
         # -------------------------
         # Construct Computational
@@ -88,13 +89,16 @@ class CycleGAN():
                               outputs=[valid_A, valid_B,
                                        reconstr_A, reconstr_B,
                                        img_A_id, img_B_id])
-        self.combined.compile(loss=['mse', 'mse',
-                                    'mae', 'mae',
-                                    'mae', 'mae'],
-                              loss_weights=[1, 1,
-                                            self.lambda_cycle, self.lambda_cycle,
-                                            self.lambda_id, self.lambda_id],
-                              optimizer=optimizer)
+        self.combined_compile_kwargs = dict(
+            loss=['mse', 'mse',
+                  'mae', 'mae',
+                  'mae', 'mae'],
+            loss_weights=[1, 1,
+                          self.lambda_cycle, self.lambda_cycle,
+                          self.lambda_id, self.lambda_id],
+            optimizer=optimizer
+        )
+        self.combined.compile(**self.combined_compile_kwargs)
 
     def build_generator(self):
         """U-Net Generator"""
@@ -224,15 +228,24 @@ class CycleGAN():
 
         self.save_model()
 
+    def get_model_paths(self, model_name):
+        model_path = "saved_model/cyclegan_%s_%dx%d.json" % (
+            model_name,
+            self.img_rows,
+            self.img_cols
+        )
+        weights_path = "saved_model/cyclegan_%s_%dx%d_weights.hdf5" % (
+            model_name,
+            self.img_rows,
+            self.img_cols
+        )
+
+        return model_path, weights_path
+
     def save_model(self):
 
         def save(model, model_name):
-            model_path = "saved_model/%s_%dx%d.json" % (model_name, self.img_rows, self.img_cols)
-            weights_path = "saved_model/%s_%dx%d_weights.hdf5" % (
-                model_name,
-                self.img_rows,
-                self.img_cols
-            )
+            model_path, weights_path = self.get_model_paths(model_name)
 
             options = {
                 "file_arch": model_path,
@@ -243,11 +256,44 @@ class CycleGAN():
 
             model.save_weights(options['file_weight'])
 
-        save(self.d_A, "cyclegan_d_A")
-        save(self.d_B, "cyclegan_d_B")
-        save(self.g_AB, "cyclegan_g_AB")
-        save(self.g_BA, "cyclegan_g_BA")
-        save(self.combined, "cyclegan_combined")
+        save(self.d_A, "d_A")
+        save(self.d_B, "d_B")
+        save(self.g_AB, "g_AB")
+        save(self.g_BA, "g_BA")
+        save(self.combined, "combined")
+
+    def load_model(self):
+        def load(model_name, compile_kwargs=None):
+            model_path, weights_path = self.get_model_paths(model_name)
+
+            print("Loading modelo {} from files {} and {}".format(
+                model_name, model_path, weights_path
+            ))
+            with open(model_path, 'r') as json_file:
+                loaded_model_json = json_file.read()
+
+            loaded_model = model_from_json(
+                loaded_model_json,
+                custom_objects=dict(
+                    InstanceNormalization=InstanceNormalization
+                ))
+
+            # load weights into new model
+            loaded_model.load_weights(weights_path)
+            print("Loaded model {} from disk".format(model_name))
+
+            # evaluate loaded model on test data
+            if compile_kwargs is not None:
+                loaded_model.compile(**compile_kwargs)
+                print("Compiled model {}".format(model_name))
+
+            setattr(self, model_name, loaded_model)
+
+        load("d_A", self.d_compile_kwargs)
+        load("d_B", self.d_compile_kwargs)
+        load("g_AB")
+        load("g_BA")
+        load("combined", self.combined_compile_kwargs)
 
     def sample_images(self, epoch, batch_i):
         os.makedirs(
