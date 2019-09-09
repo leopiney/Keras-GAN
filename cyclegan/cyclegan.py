@@ -227,14 +227,20 @@ class CycleGAN():
     def save_model(self):
 
         def save(model, model_name):
-            model_path = "saved_model/%s.json" % model_name
-            weights_path = "saved_model/%s_weights.hdf5" % model_name
+            model_path = "saved_model/%s_%dx%d.json" % (model_name, self.img_rows, self.img_cols)
+            weights_path = "saved_model/%s_%dx%d_weights.hdf5" % (
+                model_name,
+                self.img_rows,
+                self.img_cols
+            )
+
             options = {
                 "file_arch": model_path,
                 "file_weight": weights_path
             }
             json_string = model.to_json()
             open(options['file_arch'], 'w').write(json_string)
+
             model.save_weights(options['file_weight'])
 
         save(self.d_A, "cyclegan_d_A")
@@ -244,7 +250,10 @@ class CycleGAN():
         save(self.combined, "cyclegan_combined")
 
     def sample_images(self, epoch, batch_i):
-        os.makedirs('images/%s' % self.dataset_name, exist_ok=True)
+        os.makedirs(
+            'images/%s_%dx%d' % (self.dataset_name, self.img_rows, self.img_cols),
+            exist_ok=True
+        )
         r, c = 2, 3
 
         imgs_A = self.data_loader.load_data(domain="A", batch_size=1, is_testing=True)
@@ -279,16 +288,16 @@ class CycleGAN():
             self.dataset_name,
             self.img_rows,
             self.img_cols,
-            self.epoch,
+            epoch,
             batch_i
         ))
         plt.close()
 
 
 if __name__ == '__main__':
-    gan = CycleGAN(dataset_name='base2basent', input_shape=(384, 384, 3))
+    gan = CycleGAN(dataset_name='base2basent', input_shape=(128, 128, 3))
     gan.train(
         epochs=100,
-        batch_size=8,
-        sample_interval=8
+        batch_size=1,
+        sample_interval=100
     )
